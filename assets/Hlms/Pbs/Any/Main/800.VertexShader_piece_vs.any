@@ -269,7 +269,29 @@
 
 	/// hlms_uv_count will be 0 on shadow caster passes w/out alpha test
 	@foreach( hlms_uv_count, n )
-		outVs.uv@n = inVs_uv@n;@end
+		@property( !hlms_use_triplanar )
+			outVs.uv@n = inVs_uv@n;
+		@else
+			
+			float3 worldNorm2;
+			worldNorm2.x = dot( worldMat[0].xyz, inputNormal );
+			worldNorm2.y = dot( worldMat[1].xyz, inputNormal );
+			worldNorm2.z = dot( worldMat[2].xyz, inputNormal );
+			
+			// in wNorm is the world-space normal of the fragment
+			float3 blending = abs( worldNorm2 );
+			blending = normalize(max(blending, 0.00001)); // Force weights to sum to 1.0
+			float b = (blending.x + blending.y + blending.z);
+			blending /= float3(b, b, b);
+
+			float2 top = mul(inVs_vertex.xz, float2( worldMat[0].x, worldMat[2].z ));
+			float2 front = mul(inVs_vertex.xy, float2( worldMat[0].x, worldMat[1].y ));
+			float2 left = mul(inVs_vertex.yz, float2( worldMat[1].y, worldMat[2].z ));
+			float2 normalTex = top * blending.y + front * blending.z + left * blending.x;
+
+			outVs.uv@n = normalTex;//mul(blending.y, top) + mul(blending.z, front) + mul(blending.x, left);
+		@end
+	@end
 
 @property( syntax != metal )
 	@property( (!hlms_shadowcaster || alpha_test) && !lower_gpu_overhead )
